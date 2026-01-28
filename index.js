@@ -1,79 +1,36 @@
-// index.js - AMAR-MD bot (session always saved)
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
-const P = require("pino");
-const fs = require("fs");
-const QRCode = require("qrcode");
+#!/usr/bin/env node
 
-// Session folder
-const sessionFolder = "./session";
+console.log(`
+╔═══════════════════════════════════════╗
+║    WhatsApp Bot for Termux           ║
+║    With QR Code Pairing              ║
+╚═══════════════════════════════════════╝
+`);
 
-// QR path (optional for first login)
-const qrPath = "/data/data/com.termux/files/home/storage/downloads/amar_md_qr.png";
+require('dotenv').config();
+const { spawn } = require('child_process');
 
-// Delay helper
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+// Check if running in Termux
+const isTermux = process.env.TERMUX_VERSION !== undefined;
+
+if (!isTermux) {
+    console.warn('⚠️  This bot is optimized for Termux!');
 }
 
-async function startBot() {
-  // Load or create session
-  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+// Start the bot
+const botProcess = spawn('node', ['src/bot/bot.js'], {
+    stdio: 'inherit',
+    env: { ...process.env, FORCE_COLOR: '3' }
+});
 
-  const sock = makeWASocket({
-    logger: P({ level: "silent" }),
-    auth: state,
-    browser: ["AMAR-MD", "Chrome", "1.0"]
-  });
-
-  // Always save credentials whenever they update
-  sock.ev.on("creds.update", saveCreds);
-
-  // Connection updates
-  sock.ev.on("connection.update", async (update) => {
-    if (update.qr) {
-      // Always save QR to Downloads for first login
-      QRCode.toFile(qrPath, update.qr, { width: 400 }, (err) => {
-        if (err) console.error(err);
-        else console.log(`📱 QR saved to Downloads: ${qrPath}`);
-        console.log("Scan QR in WhatsApp → Linked Devices → Link a Device");
-      });
-    }
-
-    if (update.connection === "open") {
-      console.log("✅ Bot connected successfully!");
-      // Save session every time connection opens
-      saveCreds();
-      console.log("💾 Session saved successfully!");
-    }
-
-    if (update.connection === "close") {
-      console.log("🔄 Connection closed. Reconnecting in 5 seconds...");
-      await delay(5000); // Wait before reconnecting
-      startBot(); // Retry
-    }
-  });
-
-  // Message handler
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const m = messages[0];
-    if (!m.message) return;
-
-    // Anti-delete
-    if (fs.existsSync("./lib/antiDelete.js")) {
-      await require("./lib/antiDelete")(sock, m);
-    }
-
-    // Anti view-once
-    if (fs.existsSync("./lib/antiViewOnce.js")) {
-      await require("./lib/antiViewOnce")(sock, m);
-    }
-
-    // Plugins / commands
-    if (fs.existsSync("./lib/handler.js")) {
-      await require("./lib/handler")(sock, m);
-    }
-  });
+// Start server if enabled
+if (process.env.ENABLE_SERVER === 'true') {
+    const serverProcess = spawn('node', ['src/server/server.js'], {
+        stdio: 'inherit',
+        env: { ...process.env, FORCE_COLOR: '3' }
+    });
 }
 
-// Start bot
-startBot();
+console.log('\n📱 Bot is starting...');
+console.log('📸 You will see QR code in terminal shortly');
+console.log('📝 Scan it with WhatsApp → Linked Devices\n');
