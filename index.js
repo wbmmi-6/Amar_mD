@@ -1,12 +1,5 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState
-} = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const P = require("pino");
-
-const handler = require("./lib/handler");
-const antiDelete = require("./lib/antiDelete");
-const antiViewOnce = require("./lib/antiViewOnce");
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("./session");
@@ -19,13 +12,15 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const m = messages[0];
-    if (!m.message) return;
+  sock.ev.on("connection.update", (update) => {
+    if (update.qr) {
+      console.log("Scan this QR to connect WhatsApp:\n" + update.qr);
+    }
 
-    await antiDelete(sock, m);
-    await antiViewOnce(sock, m);
-    await handler(sock, m);
+    if (update.connection === "close") {
+      console.log("Connection closed, restarting...");
+      startBot();
+    }
   });
 }
 
