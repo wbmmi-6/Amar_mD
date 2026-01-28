@@ -1,15 +1,18 @@
-// index.js
+// index.js - AMAR-MD Termux-ready
 const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const P = require("pino");
-const readline = require("readline-sync");
 const fs = require("fs");
+const QRCode = require("qrcode");
 
-// Ask for WhatsApp number
-const phoneNumber = readline.question("Enter your WhatsApp number (with country code, e.g., 233xxxxxxxxx): ");
+// Path for session folder
+const sessionFolder = "./session";
+
+// Path to save QR code (Downloads folder)
+const qrPath = "/data/data/com.termux/files/home/storage/downloads/amar_md_qr.png";
 
 async function startBot() {
-  // Create session folder for this number
-  const { state, saveCreds } = await useMultiFileAuthState(`./session-${phoneNumber}`);
+  // Load or create session
+  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
   const sock = makeWASocket({
     logger: P({ level: "silent" }),
@@ -19,29 +22,48 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // Connection updates
   sock.ev.on("connection.update", (update) => {
+    if (update.qr) {
+      // First-time login: save QR to Downloads
+      QRCode.toFile(qrPath, update.qr, { width: 400 }, (err) => {
+        if (err) console.error(err);
+        else console.log(`📱 First-time login! QR saved to Downloads: ${qrPath}`);
+        console.log("Open Files app → Downloads → scan QR with WhatsApp → Linked Devices → Link a Device");
+      });
+    }
+
     if (update.connection === "open") {
-      console.log("✅ Connected successfully!");
-      // Generate pairing code (base64 of session)
-      const pairingCode = Buffer.from(JSON.stringify(state)).toString("base64");
-      console.log("\n🔑 Your pairing code is:\n", pairingCode);
-      console.log("\nSave this code somewhere safe. You can use it to log in without QR.");
+      console.log("✅ Bot connected successfully!");
     }
 
     if (update.connection === "close") {
-      console.log("🔄 Connection closed, restarting...");
+      console.log("🔄 Connection closed. Restarting...");
       startBot();
     }
   });
 
-  // Message handler (plugins, anti-delete, etc.)
+  // Handle incoming messages
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const m = messages[0];
     if (!m.message) return;
-    await require("./lib/antiDelete")(sock, m);
-    await require("./lib/antiViewOnce")(sock, m);
-    await require("./lib/handler")(sock, m);
+
+    // Anti-delete
+    if (fs.existsSync("./lib/antiDelete.js")) {
+      await require("./lib/antiDelete")(sock, m);
+    }
+
+    // Anti view-once
+    if (fs.existsSync("./lib/antiViewOnce.js")) {
+      await require("./lib/antiViewOnce")(sock, m);
+    }
+
+    // Plugins / commands
+    if (fs.existsSync("./lib/handler.js")) {
+      await require("./lib/handler")(sock, m);
+    }
   });
 }
 
+// Start the bot
 startBot();
