@@ -1,14 +1,19 @@
-// index.js - AMAR-MD Termux-ready
+// index.js - AMAR-MD bot (session always saved)
 const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const P = require("pino");
 const fs = require("fs");
 const QRCode = require("qrcode");
 
-// Path for session folder
+// Session folder
 const sessionFolder = "./session";
 
-// Path to save QR code (Downloads folder)
+// QR path (optional for first login)
 const qrPath = "/data/data/com.termux/files/home/storage/downloads/amar_md_qr.png";
+
+// Delay helper
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function startBot() {
   // Load or create session
@@ -20,30 +25,35 @@ async function startBot() {
     browser: ["AMAR-MD", "Chrome", "1.0"]
   });
 
+  // Always save credentials whenever they update
   sock.ev.on("creds.update", saveCreds);
 
   // Connection updates
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on("connection.update", async (update) => {
     if (update.qr) {
-      // First-time login: save QR to Downloads
+      // Always save QR to Downloads for first login
       QRCode.toFile(qrPath, update.qr, { width: 400 }, (err) => {
         if (err) console.error(err);
-        else console.log(`📱 First-time login! QR saved to Downloads: ${qrPath}`);
-        console.log("Open Files app → Downloads → scan QR with WhatsApp → Linked Devices → Link a Device");
+        else console.log(`📱 QR saved to Downloads: ${qrPath}`);
+        console.log("Scan QR in WhatsApp → Linked Devices → Link a Device");
       });
     }
 
     if (update.connection === "open") {
       console.log("✅ Bot connected successfully!");
+      // Save session every time connection opens
+      saveCreds();
+      console.log("💾 Session saved successfully!");
     }
 
     if (update.connection === "close") {
-      console.log("🔄 Connection closed. Restarting...");
-      startBot();
+      console.log("🔄 Connection closed. Reconnecting in 5 seconds...");
+      await delay(5000); // Wait before reconnecting
+      startBot(); // Retry
     }
   });
 
-  // Handle incoming messages
+  // Message handler
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const m = messages[0];
     if (!m.message) return;
@@ -65,5 +75,5 @@ async function startBot() {
   });
 }
 
-// Start the bot
+// Start bot
 startBot();
