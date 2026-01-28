@@ -1,7 +1,7 @@
 # 🤖 AMAR-MD WhatsApp Bot
 
 <p align="center">
-  <img src="YOUR_BOT_IMAGE_URL" width="300"/>
+  <img src="https://iili.io/fix5gKg.png" width="300"/>
 </p>
 
 <p align="center">
