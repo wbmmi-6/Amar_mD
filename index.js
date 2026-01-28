@@ -1,5 +1,9 @@
+// index.js - Termux-ready AMAR-MD bot
 const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const P = require("pino");
+const qrcode = require("qrcode-terminal");
+
+// Your bot modules
 const handler = require("./lib/handler");
 const antiDelete = require("./lib/antiDelete");
 const antiViewOnce = require("./lib/antiViewOnce");
@@ -17,7 +21,9 @@ async function startBot() {
 
   sock.ev.on("connection.update", (update) => {
     if (update.qr) {
-      console.log("📱 Scan this QR to connect your WhatsApp:\n" + update.qr);
+      // Print QR as ASCII for Termux
+      qrcode.generate(update.qr, { small: true });
+      console.log("📱 Scan this QR code with WhatsApp");
     }
 
     if (update.connection === "close") {
@@ -34,10 +40,14 @@ async function startBot() {
     const m = messages[0];
     if (!m.message) return;
 
+    // Run anti-delete and anti-view-once
     await antiDelete(sock, m);
     await antiViewOnce(sock, m);
+
+    // Handle commands and plugins
     await handler(sock, m);
   });
 }
 
+// Start the bot
 startBot();
